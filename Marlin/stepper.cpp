@@ -188,7 +188,7 @@ volatile long Stepper::endstops_trigsteps[XYZ];
   #define Z_APPLY_STEP(v,Q) Z_STEP_WRITE(v)
 #endif
 
-#if DISABLED(MIXING_EXTRUDER)
+#if E_STEPPERS && DISABLED(MIXING_EXTRUDER)
   #define E_APPLY_STEP(v,Q) E_STEP_WRITE(v)
 #endif
 
@@ -304,7 +304,7 @@ void Stepper::set_directions() {
     SET_STEP_DIR(Z); // C
   #endif
 
-  #if DISABLED(ADVANCE) && DISABLED(LIN_ADVANCE)
+  #if E_STEPPERS && DISABLED(ADVANCE) && DISABLED(LIN_ADVANCE)
     if (motor_direction(E_AXIS)) {
       REV_E_DIR();
       count_direction[E_AXIS] = -1;
@@ -342,7 +342,7 @@ ISR(TIMER1_COMPA_vect) {
   #endif
 }
 
-#define _ENABLE_ISRs() do { cli(); if (thermalManager.in_temp_isr) CBI(TIMSK0, OCIE0B); else SBI(TIMSK0, OCIE0B); ENABLE_STEPPER_DRIVER_INTERRUPT(); } while(0)
+#define _ENABLE_ISRs() do { cli(); if (thermalManager.in_temp_isr) CBI(TIMSK0, OCIE0B); else SBI(TIMSK0, OCIE0B); ENABLE_STEPPER_DRIVER_INTERRUPT(); }while(0)
 
 void Stepper::isr() {
 
@@ -606,7 +606,7 @@ void Stepper::isr() {
     #endif
 
     // For non-advance use linear interpolation for E also
-    #if DISABLED(ADVANCE) && DISABLED(LIN_ADVANCE)
+    #if E_STEPPERS && DISABLED(ADVANCE) && DISABLED(LIN_ADVANCE)
       #if ENABLED(MIXING_EXTRUDER)
         // Keep updating the single E axis
         counter_E += current_block->steps[E_AXIS];
@@ -640,7 +640,7 @@ void Stepper::isr() {
       PULSE_STOP(Z);
     #endif
 
-    #if DISABLED(ADVANCE) && DISABLED(LIN_ADVANCE)
+    #if E_STEPPERS && DISABLED(ADVANCE) && DISABLED(LIN_ADVANCE)
       #if ENABLED(MIXING_EXTRUDER)
         // Always step the single E axis
         if (counter_E > 0) {
@@ -832,7 +832,7 @@ void Stepper::isr() {
   #endif
 }
 
-#if ENABLED(ADVANCE) || ENABLED(LIN_ADVANCE)
+#if E_STEPPERS && (ENABLED(ADVANCE) || ENABLED(LIN_ADVANCE))
 
   #define CYCLES_EATEN_E (E_STEPPERS * 5)
   #define EXTRA_CYCLES_E (STEP_PULSE_CYCLES - (CYCLES_EATEN_E))

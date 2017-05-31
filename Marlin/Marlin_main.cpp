@@ -5858,25 +5858,6 @@ inline void gcode_M17() {
     }
   }
 
-  static void ensure_safe_temperature() {
-    bool heaters_heating = true;
-
-    wait_for_heatup = true;    // M108 will clear this
-    while (wait_for_heatup && heaters_heating) {
-      idle();
-      heaters_heating = false;
-      HOTEND_LOOP() {
-        if (thermalManager.degTargetHotend(e) && abs(thermalManager.degHotend(e) - thermalManager.degTargetHotend(e)) > 3) {
-          heaters_heating = true;
-          #if ENABLED(ULTIPANEL)
-            lcd_advanced_pause_show_message(ADVANCED_PAUSE_MESSAGE_WAIT_FOR_NOZZLES_TO_HEAT);
-          #endif
-          break;
-        }
-      }
-    }
-  }
-
   static bool pause_print(const float &retract, const float &z_lift, const float &x_pos, const float &y_pos,
                           const float &unload_length = 0 , const int8_t max_beep_count = 0, const bool show_lcd = false
   ) {
@@ -5976,6 +5957,47 @@ inline void gcode_M17() {
       thermalManager.start_heater_idle_timer(e, nozzle_timeout);
 
     return true;
+  }
+
+  static void ensure_safe_temperature() {
+    bool heaters_heating = true,
+         did_show = false;
+    wait_for_heatup = true;
+    while (wait_for_heatup && heaters_heating) {
+      idle();
+      heaters_heating = false;
+      HOTEND_LOOP() {
+        if (thermalManager.degTargetHotend(e) && abs(thermalManager.degHotend(e) - thermalManager.degTargetHotend(e)) > 3) {
+          heaters_heating = true;
+          #if ENABLED(ULTIPANEL)
+            if (!did_show) { // Show "wait for heating"
+              lcd_advanced_pause_show_message(ADVANCED_PAUSE_MESSAGE_WAIT_FOR_NOZZLES_TO_HEAT);
+              did_show = true;
+            }
+          #endif
+          break;
+        }
+      }
+    }
+  }
+
+  static void ensure_safe_temperature() {
+    bool did_show = false;
+    wait_for_heatup = true;
+    while (wait_for_heatup) {
+      idle();
+      wait_for_heatup = false;
+      HOTEND_LOOP() {
+        if (thermalManager.degTargetHotend(e) && abs(thermalManager.degHotend(e) - thermalManager.degTargetHotend(e)) > 3) {
+          wait_for_heatup = true;
+          if (!did_show) { // Show "wait for heating"
+            lcd_advanced_pause_show_message(ADVANCED_PAUSE_MESSAGE_WAIT_FOR_NOZZLES_TO_HEAT);
+            did_show = true;
+          }
+          break;
+        }
+      }
+    }
   }
 
   static void wait_for_filament_reload(const int8_t max_beep_count = 0) {
@@ -6120,6 +6142,7 @@ inline void gcode_M17() {
 
     move_away_flag = false;
   }
+
 #endif // ADVANCED_PAUSE_FEATURE
 
 #if ENABLED(SDSUPPORT)
@@ -6919,49 +6942,53 @@ inline void gcode_M77() { print_job_timer.stop(); }
   }
 #endif
 
-/**
- * M104: Set hot end temperature
- */
-inline void gcode_M104() {
-  if (get_target_extruder_from_command(104)) return;
-  if (DEBUGGING(DRYRUN)) return;
+#if HOTENDS
 
-  #if ENABLED(SINGLENOZZLE)
-    if (target_extruder != active_extruder) return;
-  #endif
+  /**
+   * M104: Set hot end temperature
+   */
+  inline void gcode_M104() {
+    if (get_target_extruder_from_command(104)) return;
+    if (DEBUGGING(DRYRUN)) return;
 
-  if (parser.seen('S')) {
-    const int16_t temp = parser.value_celsius();
-    thermalManager.setTargetHotend(temp, target_extruder);
-
-    #if ENABLED(DUAL_X_CARRIAGE)
-      if (dual_x_carriage_mode == DXC_DUPLICATION_MODE && target_extruder == 0)
-        thermalManager.setTargetHotend(temp ? temp + duplicate_extruder_temp_offset : 0, 1);
+    #if ENABLED(SINGLENOZZLE)
+      if (target_extruder != active_extruder) return;
     #endif
 
-    #if ENABLED(PRINTJOB_TIMER_AUTOSTART)
-      /**
-       * Stop the timer at the end of print. Start is managed by 'heat and wait' M109.
-       * We use half EXTRUDE_MINTEMP here to allow nozzles to be put into hot
-       * standby mode, for instance in a dual extruder setup, without affecting
-       * the running print timer.
-       */
-      if (parser.value_celsius() <= (EXTRUDE_MINTEMP) / 2) {
-        print_job_timer.stop();
-        LCD_MESSAGEPGM(WELCOME_MSG);
-      }
-    #endif
+    if (parser.seen('S')) {
+      const int16_t temp = parser.value_celsius();
+      thermalManager.setTargetHotend(temp, target_extruder);
 
-    if (parser.value_celsius() > thermalManager.degHotend(target_extruder))
-      lcd_status_printf_P(0, PSTR("E%i %s"), target_extruder + 1, MSG_HEATING);
+      #if ENABLED(DUAL_X_CARRIAGE)
+        if (dual_x_carriage_mode == DXC_DUPLICATION_MODE && target_extruder == 0)
+          thermalManager.setTargetHotend(temp ? temp + duplicate_extruder_temp_offset : 0, 1);
+      #endif
+
+      #if ENABLED(PRINTJOB_TIMER_AUTOSTART)
+        /**
+         * Stop the timer at the end of print. Start is managed by 'heat and wait' M109.
+         * We use half EXTRUDE_MINTEMP here to allow nozzles to be put into hot
+         * standby mode, for instance in a dual extruder setup, without affecting
+         * the running print timer.
+         */
+        if (parser.value_celsius() <= (EXTRUDE_MINTEMP) / 2) {
+          print_job_timer.stop();
+          LCD_MESSAGEPGM(WELCOME_MSG);
+        }
+      #endif
+
+      if (parser.value_celsius() > thermalManager.degHotend(target_extruder))
+        lcd_status_printf_P(0, PSTR("E%i %s"), target_extruder + 1, MSG_HEATING);
+    }
+
+    #if ENABLED(AUTOTEMP)
+      planner.autotemp_M104_M109();
+    #endif
   }
 
-  #if ENABLED(AUTOTEMP)
-    planner.autotemp_M104_M109();
-  #endif
-}
+#endif // HOTENDS
 
-#if HAS_TEMP_HOTEND || HAS_TEMP_BED
+#if HOTENDS || HAS_TEMP_BED
 
   void print_heater_state(const float &c, const float &t,
     #if ENABLED(SHOW_TEMP_ADC_VALUES)
@@ -7037,10 +7064,10 @@ inline void gcode_M104() {
 inline void gcode_M105() {
   if (get_target_extruder_from_command(105)) return;
 
-  #if HAS_TEMP_HOTEND || HAS_TEMP_BED
+  #if HOTENDS || HAS_TEMP_BED
     SERIAL_PROTOCOLPGM(MSG_OK);
     print_heaterstates();
-  #else // !HAS_TEMP_HOTEND && !HAS_TEMP_BED
+  #else // !HOTENDS && !HAS_TEMP_BED
     SERIAL_ERROR_START();
     SERIAL_ERRORLNPGM(MSG_ERR_NO_THERMISTORS);
   #endif
@@ -7048,7 +7075,7 @@ inline void gcode_M105() {
   SERIAL_EOL();
 }
 
-#if ENABLED(AUTO_REPORT_TEMPERATURES) && (HAS_TEMP_HOTEND || HAS_TEMP_BED)
+#if ENABLED(AUTO_REPORT_TEMPERATURES) && (HOTENDS || HAS_TEMP_BED)
 
   static uint8_t auto_report_temp_interval;
   static millis_t next_temp_report_ms;
@@ -7128,153 +7155,159 @@ inline void gcode_M105() {
  *       Rxxx Wait for extruder(s) to reach temperature. Waits when heating and cooling.
  */
 
-#ifndef MIN_COOLING_SLOPE_DEG
-  #define MIN_COOLING_SLOPE_DEG 1.50
-#endif
-#ifndef MIN_COOLING_SLOPE_TIME
-  #define MIN_COOLING_SLOPE_TIME 60
-#endif
+#if HOTENDS
 
-inline void gcode_M109() {
-
-  if (get_target_extruder_from_command(109)) return;
-  if (DEBUGGING(DRYRUN)) return;
-
-  #if ENABLED(SINGLENOZZLE)
-    if (target_extruder != active_extruder) return;
+  #ifndef MIN_COOLING_SLOPE_DEG
+    #define MIN_COOLING_SLOPE_DEG 1.50
+  #endif
+  #ifndef MIN_COOLING_SLOPE_TIME
+    #define MIN_COOLING_SLOPE_TIME 60
   #endif
 
-  const bool no_wait_for_cooling = parser.seen('S');
-  if (no_wait_for_cooling || parser.seen('R')) {
-    const int16_t temp = parser.value_celsius();
-    thermalManager.setTargetHotend(temp, target_extruder);
+  inline void gcode_M109() {
 
-    #if ENABLED(DUAL_X_CARRIAGE)
-      if (dual_x_carriage_mode == DXC_DUPLICATION_MODE && target_extruder == 0)
-        thermalManager.setTargetHotend(temp ? temp + duplicate_extruder_temp_offset : 0, 1);
+    if (get_target_extruder_from_command(109)) return;
+    if (DEBUGGING(DRYRUN)) return;
+
+    #if ENABLED(SINGLENOZZLE)
+      if (target_extruder != active_extruder) return;
     #endif
 
-    #if ENABLED(PRINTJOB_TIMER_AUTOSTART)
-      /**
-       * Use half EXTRUDE_MINTEMP to allow nozzles to be put into hot
-       * standby mode, (e.g., in a dual extruder setup) without affecting
-       * the running print timer.
-       */
-      if (parser.value_celsius() <= (EXTRUDE_MINTEMP) / 2) {
-        print_job_timer.stop();
-        LCD_MESSAGEPGM(WELCOME_MSG);
-      }
-      else
-        print_job_timer.start();
-    #endif
+    const bool no_wait_for_cooling = parser.seen('S');
+    if (no_wait_for_cooling || parser.seen('R')) {
+      const int16_t temp = parser.value_celsius();
+      thermalManager.setTargetHotend(temp, target_extruder);
 
-    if (thermalManager.isHeatingHotend(target_extruder)) lcd_status_printf_P(0, PSTR("E%i %s"), target_extruder + 1, MSG_HEATING);
-  }
-  else return;
-
-  #if ENABLED(AUTOTEMP)
-    planner.autotemp_M104_M109();
-  #endif
-
-  #if TEMP_RESIDENCY_TIME > 0
-    millis_t residency_start_ms = 0;
-    // Loop until the temperature has stabilized
-    #define TEMP_CONDITIONS (!residency_start_ms || PENDING(now, residency_start_ms + (TEMP_RESIDENCY_TIME) * 1000UL))
-  #else
-    // Loop until the temperature is very close target
-    #define TEMP_CONDITIONS (wants_to_cool ? thermalManager.isCoolingHotend(target_extruder) : thermalManager.isHeatingHotend(target_extruder))
-  #endif
-
-  float target_temp = -1.0, old_temp = 9999.0;
-  bool wants_to_cool = false;
-  wait_for_heatup = true;
-  millis_t now, next_temp_ms = 0, next_cool_check_ms = 0;
-
-  KEEPALIVE_STATE(NOT_BUSY);
-
-  #if ENABLED(PRINTER_EVENT_LEDS)
-    const float start_temp = thermalManager.degHotend(target_extruder);
-    uint8_t old_blue = 0;
-  #endif
-
-  do {
-    // Target temperature might be changed during the loop
-    if (target_temp != thermalManager.degTargetHotend(target_extruder)) {
-      wants_to_cool = thermalManager.isCoolingHotend(target_extruder);
-      target_temp = thermalManager.degTargetHotend(target_extruder);
-
-      // Exit if S<lower>, continue if S<higher>, R<lower>, or R<higher>
-      if (no_wait_for_cooling && wants_to_cool) break;
-    }
-
-    now = millis();
-    if (ELAPSED(now, next_temp_ms)) { //Print temp & remaining time every 1s while waiting
-      next_temp_ms = now + 1000UL;
-      print_heaterstates();
-      #if TEMP_RESIDENCY_TIME > 0
-        SERIAL_PROTOCOLPGM(" W:");
-        if (residency_start_ms)
-          SERIAL_PROTOCOL(long((((TEMP_RESIDENCY_TIME) * 1000UL) - (now - residency_start_ms)) / 1000UL));
-        else
-          SERIAL_PROTOCOLCHAR('?');
+      #if ENABLED(DUAL_X_CARRIAGE)
+        if (dual_x_carriage_mode == DXC_DUPLICATION_MODE && target_extruder == 0)
+          thermalManager.setTargetHotend(temp ? temp + duplicate_extruder_temp_offset : 0, 1);
       #endif
-      SERIAL_EOL();
+
+      #if ENABLED(PRINTJOB_TIMER_AUTOSTART)
+        /**
+         * Use half EXTRUDE_MINTEMP to allow nozzles to be put into hot
+         * standby mode, (e.g., in a dual extruder setup) without affecting
+         * the running print timer.
+         */
+        if (parser.value_celsius() <= (EXTRUDE_MINTEMP) / 2) {
+          print_job_timer.stop();
+          LCD_MESSAGEPGM(WELCOME_MSG);
+        }
+        else
+          print_job_timer.start();
+      #endif
+
+      if (thermalManager.isHeatingHotend(target_extruder)) lcd_status_printf_P(0, PSTR("E%i %s"), target_extruder + 1, MSG_HEATING);
     }
+    else return;
 
-    idle();
-    refresh_cmd_timeout(); // to prevent stepper_inactive_time from running out
-
-    const float temp = thermalManager.degHotend(target_extruder);
-
-    #if ENABLED(PRINTER_EVENT_LEDS)
-      // Gradually change LED strip from violet to red as nozzle heats up
-      if (!wants_to_cool) {
-        const uint8_t blue = map(constrain(temp, start_temp, target_temp), start_temp, target_temp, 255, 0);
-        if (blue != old_blue) set_led_color(255, 0, (old_blue = blue));
-      }
+    #if ENABLED(AUTOTEMP)
+      planner.autotemp_M104_M109();
     #endif
 
     #if TEMP_RESIDENCY_TIME > 0
-
-      const float temp_diff = fabs(target_temp - temp);
-
-      if (!residency_start_ms) {
-        // Start the TEMP_RESIDENCY_TIME timer when we reach target temp for the first time.
-        if (temp_diff < TEMP_WINDOW) residency_start_ms = now;
-      }
-      else if (temp_diff > TEMP_HYSTERESIS) {
-        // Restart the timer whenever the temperature falls outside the hysteresis.
-        residency_start_ms = now;
-      }
-
+      millis_t residency_start_ms = 0;
+      // Loop until the temperature has stabilized
+      #define TEMP_CONDITIONS (!residency_start_ms || PENDING(now, residency_start_ms + (TEMP_RESIDENCY_TIME) * 1000UL))
+    #else
+      // Loop until the temperature is very close target
+      #define TEMP_CONDITIONS (wants_to_cool ? thermalManager.isCoolingHotend(target_extruder) : thermalManager.isHeatingHotend(target_extruder))
     #endif
 
-    // Prevent a wait-forever situation if R is misused i.e. M109 R0
-    if (wants_to_cool) {
-      // break after MIN_COOLING_SLOPE_TIME seconds
-      // if the temperature did not drop at least MIN_COOLING_SLOPE_DEG
-      if (!next_cool_check_ms || ELAPSED(now, next_cool_check_ms)) {
-        if (old_temp - temp < MIN_COOLING_SLOPE_DEG) break;
-        next_cool_check_ms = now + 1000UL * MIN_COOLING_SLOPE_TIME;
-        old_temp = temp;
+    float target_temp = -1.0, old_temp = 9999.0;
+    bool wants_to_cool = false;
+    wait_for_heatup = true;
+    millis_t now, next_temp_ms = 0, next_cool_check_ms = 0;
+
+    KEEPALIVE_STATE(NOT_BUSY);
+
+    #if ENABLED(PRINTER_EVENT_LEDS)
+      const float start_temp = thermalManager.degHotend(target_extruder);
+      uint8_t old_blue = 0;
+    #endif
+
+    do {
+      // Target temperature might be changed during the loop
+      if (target_temp != thermalManager.degTargetHotend(target_extruder)) {
+        wants_to_cool = thermalManager.isCoolingHotend(target_extruder);
+        target_temp = thermalManager.degTargetHotend(target_extruder);
+
+        // Exit if S<lower>, continue if S<higher>, R<lower>, or R<higher>
+        if (no_wait_for_cooling && wants_to_cool) break;
       }
+
+      now = millis();
+      if (ELAPSED(now, next_temp_ms)) { //Print temp & remaining time every 1s while waiting
+        next_temp_ms = now + 1000UL;
+        print_heaterstates();
+        #if TEMP_RESIDENCY_TIME > 0
+          SERIAL_PROTOCOLPGM(" W:");
+          if (residency_start_ms)
+            SERIAL_PROTOCOL(long((((TEMP_RESIDENCY_TIME) * 1000UL) - (now - residency_start_ms)) / 1000UL));
+          else
+            SERIAL_PROTOCOLCHAR('?');
+        #endif
+        SERIAL_EOL();
+      }
+
+      idle();
+      refresh_cmd_timeout(); // to prevent stepper_inactive_time from running out
+
+      const float temp = thermalManager.degHotend(target_extruder);
+
+      #if ENABLED(PRINTER_EVENT_LEDS)
+        // Gradually change LED strip from violet to red as nozzle heats up
+        if (!wants_to_cool) {
+          const uint8_t blue = map(constrain(temp, start_temp, target_temp), start_temp, target_temp, 255, 0);
+          if (blue != old_blue) set_led_color(255, 0, (old_blue = blue));
+        }
+      #else
+        SERIAL_EOL();
+      #endif
+
+      #if TEMP_RESIDENCY_TIME > 0
+
+        const float temp_diff = fabs(target_temp - temp);
+
+        if (!residency_start_ms) {
+          // Start the TEMP_RESIDENCY_TIME timer when we reach target temp for the first time.
+          if (temp_diff < TEMP_WINDOW) residency_start_ms = now;
+        }
+        else if (temp_diff > TEMP_HYSTERESIS) {
+          // Restart the timer whenever the temperature falls outside the hysteresis.
+          residency_start_ms = now;
+        }
+
+      #endif
+
+      // Prevent a wait-forever situation if R is misused i.e. M109 R0
+      if (wants_to_cool) {
+        // break after MIN_COOLING_SLOPE_TIME seconds
+        // if the temperature did not drop at least MIN_COOLING_SLOPE_DEG
+        if (!next_cool_check_ms || ELAPSED(now, next_cool_check_ms)) {
+          if (old_temp - temp < MIN_COOLING_SLOPE_DEG) break;
+          next_cool_check_ms = now + 1000UL * MIN_COOLING_SLOPE_TIME;
+          old_temp = temp;
+        }
+      }
+
+    } while (wait_for_heatup && TEMP_CONDITIONS);
+
+    if (wait_for_heatup) {
+      LCD_MESSAGEPGM(MSG_HEATING_COMPLETE);
+      #if ENABLED(PRINTER_EVENT_LEDS)
+        #if ENABLED(RGBW_LED)
+          set_led_color(0, 0, 0, 255);  // Turn on the WHITE LED
+        #else
+          set_led_color(255, 255, 255); // Set LEDs All On
+        #endif
+      #endif
     }
 
-  } while (wait_for_heatup && TEMP_CONDITIONS);
-
-  if (wait_for_heatup) {
-    LCD_MESSAGEPGM(MSG_HEATING_COMPLETE);
-    #if ENABLED(PRINTER_EVENT_LEDS)
-      #if ENABLED(RGBW_LED)
-        set_led_color(0, 0, 0, 255);  // Turn on the WHITE LED
-      #else
-        set_led_color(255, 255, 255); // Set LEDs All On
-      #endif
-    #endif
+    KEEPALIVE_STATE(IN_HANDLER);
   }
 
-  KEEPALIVE_STATE(IN_HANDLER);
-}
+#endif // HOTENDS
 
 #if HAS_TEMP_BED
 
@@ -7517,7 +7550,9 @@ inline void gcode_M140() {
       int v;
       if (parser.seen('H')) {
         v = parser.value_int();
-        lcd_preheat_hotend_temp[material] = constrain(v, EXTRUDE_MINTEMP, HEATER_0_MAXTEMP - 15);
+        #if HEATER_0_MAXTEMP
+          lcd_preheat_hotend_temp[material] = constrain(v, EXTRUDE_MINTEMP, HEATER_0_MAXTEMP - 15);
+        #endif
       }
       if (parser.seen('F')) {
         v = parser.value_int();
@@ -10461,9 +10496,11 @@ void process_next_command() {
           break;
       #endif
 
-      case 104: // M104: Set hot end temperature
-        gcode_M104();
-        break;
+      #if HOTENDS
+        case 104: // M104: Set hot end temperature
+          gcode_M104();
+          break;
+      #endif
 
       case 110: // M110: Set Current Line Number
         gcode_M110();
@@ -10504,15 +10541,17 @@ void process_next_command() {
         KEEPALIVE_STATE(NOT_BUSY);
         return; // "ok" already printed
 
-      #if ENABLED(AUTO_REPORT_TEMPERATURES) && (HAS_TEMP_HOTEND || HAS_TEMP_BED)
+      #if ENABLED(AUTO_REPORT_TEMPERATURES) && (HOTENDS || HAS_TEMP_BED)
         case 155: // M155: Set temperature auto-report interval
           gcode_M155();
           break;
       #endif
 
-      case 109: // M109: Wait for hotend temperature to reach target
-        gcode_M109();
-        break;
+      #if HOTENDS
+        case 109: // M109: Wait for hotend temperature to reach target
+          gcode_M109();
+          break;
+      #endif
 
       #if HAS_TEMP_BED
         case 190: // M190: Wait for bed temperature to reach target
@@ -12571,7 +12610,7 @@ void idle(
 
   host_keepalive();
 
-  #if ENABLED(AUTO_REPORT_TEMPERATURES) && (HAS_TEMP_HOTEND || HAS_TEMP_BED)
+  #if ENABLED(AUTO_REPORT_TEMPERATURES) && (HOTENDS || HAS_TEMP_BED)
     auto_report_temperatures();
   #endif
 

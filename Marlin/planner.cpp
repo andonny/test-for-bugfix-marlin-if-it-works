@@ -901,7 +901,7 @@ void Planner::_buffer_line(const float &a, const float &b, const float &c, const
   // Enable extruder(s)
   if (esteps) {
 
-    #if ENABLED(DISABLE_INACTIVE_EXTRUDER) // Enable only the selected extruder
+    #if HAS_EXTRUDERS && ENABLED(DISABLE_INACTIVE_EXTRUDER) // Enable only the selected extruder
 
       #define DISABLE_IDLE_E(N) if (!g_uc_extruder_last_move[N]) disable_E##N();
 
@@ -958,7 +958,6 @@ void Planner::_buffer_line(const float &a, const float &b, const float &c, const
                   DISABLE_IDLE_E(4);
                 #endif
               #endif
-            break;
             #if EXTRUDERS > 3
               case 3:
                 enable_E3();
@@ -991,11 +990,10 @@ void Planner::_buffer_line(const float &a, const float &b, const float &c, const
       enable_E3();
       enable_E4();
     #endif
-  }
 
-  if (esteps)
     NOLESS(fr_mm_s, min_feedrate_mm_s);
-  else
+  }
+  else // !esteps
     NOLESS(fr_mm_s, min_travel_feedrate_mm_s);
 
   /**
