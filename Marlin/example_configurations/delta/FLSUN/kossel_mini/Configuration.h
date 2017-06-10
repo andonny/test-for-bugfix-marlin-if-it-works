@@ -1394,6 +1394,13 @@
 //
 
 //
+//  ANET_10 controller supported displays.
+//
+//#define ANET_KEYPAD_LCD  // requires ADC_KEYPAD_PIN to be assigned to an analog pin
+//#define ANET_FULL_GRAPHICS_LCD
+//#define REPRAP_DISCOUNT_FULL_GRAPHIC_SMART_CONTROLLER  // requires Anet Adapter http://www.thingiverse.com/thing:2103748
+
+//
 // ULTIMAKER Controller.
 //
 //#define ULTIMAKERCONTROLLER
