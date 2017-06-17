@@ -2026,7 +2026,7 @@ void Temperature::isr() {
           }
         }
         break;
-    #endif
+    #endif // ADC_KEYPAD
 
     case StartupDelay: break;
 

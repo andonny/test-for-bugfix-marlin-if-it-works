@@ -1270,13 +1270,6 @@
 //
 
 //
-//  ANET_10 controller supported displays.
-//
-//#define ANET_KEYPAD_LCD  // requires ADC_KEYPAD_PIN to be assigned to an analog pin
-//#define ANET_FULL_GRAPHICS_LCD
-//#define REPRAP_DISCOUNT_FULL_GRAPHIC_SMART_CONTROLLER  // requires Anet Adapter http://www.thingiverse.com/thing:2103748
-
-//
 // ULTIMAKER Controller.
 //
 //#define ULTIMAKERCONTROLLER
@@ -1285,12 +1278,6 @@
 // ULTIPANEL as seen on Thingiverse.
 //
 //#define ULTIPANEL
-
-//
-// Cartesio UI
-// http://mauk.cc/webshop/cartesio-shop/electronics/user-interface
-//
-#define CARTESIO_UI
 
 //
 // PanelOne from T3P3 (via RAMPS 1.4 AUX2/AUX3)
@@ -1373,6 +1360,18 @@
 // default with the BQ Hephestos 2 and Witbox 2.
 //
 //#define BQ_LCD_SMART_CONTROLLER
+
+//
+// Cartesio UI
+// http://mauk.cc/webshop/cartesio-shop/electronics/user-interface
+//
+#define CARTESIO_UI
+
+//
+// ANET_10 Controller supported displays. 
+//
+//#define ANET_KEYPAD_LCD  // requires ADC_KEYPAD_PIN to be assigned to an analog pin
+//#define ANET_FULL_GRAPHICS_LCD
 
 //
 // CONTROLLER TYPE: I2C

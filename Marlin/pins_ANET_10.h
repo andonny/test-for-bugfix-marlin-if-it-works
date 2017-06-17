@@ -158,9 +158,11 @@
     #define BTN_ENC            -1
     #define ADC_KEYPAD_PIN      1
     #define ENCODER_FEEDRATE_DEADZONE 2
+
   #elif ENABLED(U8GLIB_ST7920)
     #if ENABLED(REPRAP_DISCOUNT_FULL_GRAPHIC_SMART_CONTROLLER)
-      // For RepRap Discount (with Anet Adapter wiring)
+      // For RepRap Discount with Anet Adapter wiring
+      // Anet Adapter at http://www.thingiverse.com/thing:2103748
       #define SERVO0_PIN         27 // free for BLTouch/3D-Touch
       #define BEEPER_PIN         28
       #define LCD_PINS_RS        30
@@ -171,7 +173,7 @@
       #define BTN_ENC            16
     #elif ENABLED(ANET_FULL_GRAPHICS_LCD)
       #define SERVO0_PIN         29 // free for BLTouch/3D-Touch
-      #define BEEPER_PIN 17
+      #define BEEPER_PIN         17
       #define LCD_PINS_RS        27
       #define LCD_PINS_ENABLE    28
       #define LCD_PINS_D4        30
@@ -191,4 +193,5 @@
       #define ENCODER_PULSES_PER_STEP 4
     #endif
   #endif
-#endif
+
+#endif // ULTRA_LCD && NEWPANEL
